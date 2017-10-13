@@ -9,6 +9,7 @@ and extract all the reviews for the first two pages.
 
 Output:
 total_reviews: total count of reviews extracted, e.g. 20
+
 Writes a reviews.xlsx file in storage.tmp directory.
 
 ### How do I get set up? ###
