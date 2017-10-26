@@ -5,76 +5,97 @@ import pprint
 import json
 import re
 import pandas as pd
-reviews = []
+import time
 
-def getReviews(page):
+reviews = []
+products_list = {'dove':'https://www.amazon.com/Dove-Beauty-Sensitive-Ounce-Count/product-reviews/B005HO0AR2/ref=cm_cr_arp_d_paging_btm_2?ie=UTF8&reviewerType=all_reviews&pageNumber=',
+				 'axe_deo':'https://www.amazon.com/Stick-Excite-Unilever-Hpc-Usa-11475/product-reviews/B00V6C766W/ref=cm_cr_arp_d_paging_btm_2?ie=UTF8&reviewerType=all_reviews&pageNumber=',
+				 'vaseline_intensive_lotion':'https://www.amazon.com/Vaseline-Intensive-Lotion-Advanced-Unscented/product-reviews/B00I69TBUW/ref=cm_cr_arp_d_paging_btm_2?ie=UTF8&reviewerType=all_reviews&pageNumber=',
+				 'lipton':'https://www.amazon.com/Lipton-Family-Black-Iced-Unsweetened/product-reviews/B00I8GPUDU/ref=cm_cr_arp_d_paging_btm_2?ie=UTF8&reviewerType=all_reviews&pageNumber=',
+				 'cif':'https://www.amazon.com/Frosch-Natural-Lemon-Scouring-Cleaner/product-reviews/B00XASY7T4/ref=cm_cr_arp_d_paging_btm_2?ie=UTF8&reviewerType=all_reviews&pageNumber='
+				}
+
+
+def getReviews(page, product_name):
 	global reviews
 
 	content = requests.get(page)
 	html = content.text
 	soup = BeautifulSoup(html, "lxml")
-	total = 1
+	total = 0
 
+	try:
+		for level1 in soup.find_all("div", {'class': 'a-section a-spacing-none reviews-content a-size-base'}):
+			for level2 in level1("div", {'id': 'cm_cr-review_list'}):
+				for level3 in level2("div", {'class': 'a-section review'}):
+					review = {}
+					review['product'] = product_name
 
-	for level1 in soup.find_all("div", {'class': 'a-section a-spacing-none reviews-content a-size-base'}):
-		for level2 in level1("div", {'id': 'cm_cr-review_list'}):
-			for level3 in level2("div", {'class': 'a-section review'}):
-				review = {}
+					# Avoid overwriting of stars
+					stars_text = ""
 
-				# Avoid overwriting of stars
-				stars_text = ""
+					# Get review ratings and title
+					for level4 in level3("div", {'class': 'a-row'}):
+						for level5 in level4("span", {'class': 'a-icon-alt'}):
+							if stars_text == "":
+								stars_text = level5.text.split(" ")[0]
+								review['stars'] = stars_text
+					
+					for level4 in level3("a", {'class': 'a-size-base a-link-normal review-title a-color-base a-text-bold'}):
+						review['title'] = level4.text
 
-				# Get review ratings and title
-				for level4 in level3("div", {'class': 'a-row'}):
-					for level5 in level4("span", {'class': 'a-icon-alt'}):
-						if stars_text == "":
-							stars_text = level5.text.split(" ")[0]
-							review['stars'] = stars_text
-				
-				for level4 in level3("a", {'class': 'a-size-base a-link-normal review-title a-color-base a-text-bold'}):
-					review['title'] = level4.text
+					# Get review text
+					for level4 in level3("div", {'class': 'a-row review-data'}):
+						for level5 in level4("span", {'class': 'a-size-base review-text'}):
+							text = re.sub(r"<.*>", " ", level5.text)
+							review['text'] = text.strip()
 
-				# Get review text
-				for level4 in level3("div", {'class': 'a-row review-data'}):
-					for level5 in level4("span", {'class': 'a-size-base review-text'}):
-						text = re.sub(r"<.*>", " ", level5.text)
-						review['text'] = text.strip()
+					reviews.append(review)
+					total += 1
 
-				reviews.append(review)
-				total += 1
+		return total
 
-	return total
-
+	except:
+		return 0
 
 
 def extractReviews():
 	global reviews
 
-	all_reviews = {}
-	pageno = 1
+	for product_name, product_page in products_list.items():
+		print(product_name)
+		reviews =  []
 
-	# Set this for required no. of pages
-	total_pages = 1
+		pageno = 1
 
-	total_reviews = 0
+		# Set this for required no. of pages
+		total_pages = 10000
 
-	while(pageno <= total_pages):
-		page = "https://www.amazon.com/Seagate-Expansion-Portable-External-STEA2000400/product-reviews/B00TKFEE5S/ref=cm_cr_arp_d_paging_btm_2?ie=UTF8&reviewerType=all_reviews&pageNumber=" + str(pageno)
-		total = getReviews(page)
-		
-		print("Page No. = " + str(pageno))
+		total_reviews = 0
 
-		if total == 0:
-			break
+		while(pageno <= total_pages):
+			page = product_page + str(pageno)
+			total = getReviews(page, product_name)
+			
+			print("Page No. = " + str(pageno))
 
-		pageno += 1
-		total_reviews += total
+			if total == 0:
+				break
 
-	print(total_reviews - 1)
+			total_reviews += total
 
-	df1 = pd.DataFrame.from_dict(reviews)
-	writer = pd.ExcelWriter('storage.tmp/reviews.xlsx')
-	df1.to_excel(writer)
+			if pageno % 10 == 0:
+				time.sleep(60)
+
+			pageno += 1
+
+		print(total_reviews)
+
+		df1 = pd.DataFrame.from_dict(reviews)
+		writer = pd.ExcelWriter('storage.tmp/' + product_name + '.xlsx')
+		df1.to_excel(writer)
+
+		time.sleep(120)
 
 
 if __name__ == "__main__":
